@@ -1,4 +1,4 @@
-# Go-Socket — MVP — Task List
+# GOcket — Go-Socket — Task List
 
 > **Mô tả dự án:** Xây dựng một thư viện WebSocket bằng **Golang**, gồm các cơ chế cốt lõi (event-based messaging, room, namespace, broadcast, heartbeat, acknowledgement).
 
