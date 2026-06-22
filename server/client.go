@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -16,6 +18,8 @@ type Client struct {
 	rooms       map[string]bool
 	connectedAt time.Time
 	once        sync.Once
+	mu          sync.RWMutex
+	isClosed    bool
 }
 
 func NewClient(conn *websocket.Conn, hub *Hub) *Client {
@@ -31,11 +35,52 @@ func NewClient(conn *websocket.Conn, hub *Hub) *Client {
 
 func (c *Client) Close() {
 	c.once.Do(func() {
+		c.mu.Lock()
+		c.isClosed = true
 		close(c.Send)
+		c.mu.Unlock()
 		if c.Conn != nil {
 			c.Conn.Close()
 		}
 	})
+}
+
+func (c *Client) Emit(event string, data any) error {
+	c.mu.RLock()
+	closed := c.isClosed
+	c.mu.RUnlock()
+
+	if closed {
+		return errors.New("client disconnected")
+	}
+
+	var rawData json.RawMessage
+	if data != nil {
+		marshaled, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		rawData = marshaled
+	}
+
+	packet := Packet{
+		Event: event,
+		Data:  rawData,
+	}
+
+	packetBytes, err := json.Marshal(packet)
+	if err != nil {
+		return err
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.isClosed {
+		return errors.New("client disconnected")
+	}
+
+	c.Send <- packetBytes
+	return nil
 }
 
 func (c *Client) readPump() {
